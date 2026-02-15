@@ -3,9 +3,11 @@
 import json
 import os
 from typing import Dict, Any
-from venv import logger
+import logging
 import base64
 import subprocess
+
+logger = logging.getLogger(__name__)
 
 def extract_content(name, model_source_base64, working_dir):
     """
@@ -31,8 +33,8 @@ def extract_content(name, model_source_base64, working_dir):
         raise
 
 
-# Hanlder unwrapping the OpenSCAD code to render and associated resources
-# and invoking OpenSCAD in headless mode to obtani the render model
+# Handler unwrapping the OpenSCAD code to render and associated resources
+# and invoking OpenSCAD in headless mode to obtain the render model
 def lambda_handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
     """
     Main Lambda handler function
@@ -56,7 +58,7 @@ def lambda_handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
         Dict containing status message
     """
     try:
-        # Create working direcoty
+        # Create working directory
         job_id = context.aws_request_id
         wdir = f"/tmp/{job_id}"
         os.mkdir(wdir)
@@ -78,21 +80,24 @@ def lambda_handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
         
         # invoke OpenSCAD
         output_path = os.path.join(wdir, "output.stl")
-        render_command = f"/usr/local/bin/openscad -o {output_path} {os.path.join(wdir, 'model.scad')}"
-        
+        model_path = os.path.join(wdir, 'model.scad')
+
         try:
-            render_output = subprocess.check_output(render_command, shell=True, check=True)
+            render_output = subprocess.check_output(
+                ["/usr/local/bin/openscad", "-o", output_path, model_path],
+                stderr=subprocess.STDOUT
+            )
             logger.info(f"OpenSCAD render output: {render_output.decode('utf-8')}")
         except subprocess.CalledProcessError as e:
             logger.error(f"OpenSCAD render error: {e.output.decode('utf-8')}")
             raise RuntimeError(f"OpenSCAD rendering failed: {e.output.decode('utf-8')}")
 
-        rendered_model_base64 = None
+        # Check if output file was created
+        if not os.path.exists(output_path):
+            raise RuntimeError("OpenSCAD failed to generate output file")
+
         with open(output_path, "rb") as f:
             rendered_model_base64 = base64.b64encode(f.read()).decode('utf-8')
-        
-        if not rendered_model_base64:
-            raise ValueError("Failed to render model content")
         
         logger.info(f"Successfully rendered model for job {job_id}")
 
