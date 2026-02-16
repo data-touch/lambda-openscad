@@ -15,4 +15,4 @@ RUN curl -L https://files.openscad.org/OpenSCAD-2021.01-x86_64.AppImage -o /open
 COPY src/app.py ${LAMBDA_TASK_ROOT}
 
 # Set the CMD to your handler (could also be done as a parameter override outside of the Dockerfile)
-CMD [ "app.handler" ]
+CMD [ "app.lambda_handler" ]
